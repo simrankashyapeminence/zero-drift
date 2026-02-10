@@ -66,10 +66,11 @@ class NanoBananaService:
                     "Fixed lighting, fixed decor. Only the model's action and camera angle vary. "
                     
                     "\n[CAMERA & FRAMING]: "
-                    "Medium-close shot. Keep the product branding central and razor-sharp. Text must be perfectly legible."
+                    "Wide or medium shot. The model's FULL HEAD, HAIR, AND FACE must be completely visible with clear space above the head (headroom). "
+                    "CRITICAL: NEVER crop or cutoff the model's head, face, or hair. The model must be perfectly centered within the frame. "
 
                     f"\n[DYNAMIC SPORT ACTION]: This image ({variation_index + 1}/15) MUST show the model ACTUALLY PERFORMING {product.sport}. "
-                    "Show dynamic, authentic athletic movement (e.g., mid-action strike, sprint, or pose). "
+                    "Show dynamic, authentic athletic movement (e.g., mid-action strike, sprint, or pose). The entire action and the model's full upper body must fit comfortably within the frame. "
 
                     "\n[ZERO-DRIFT GARMENT FIDELITY - CRITICAL]: "
                     "The garment must be a 100% EXACT CLONE of the source image. "

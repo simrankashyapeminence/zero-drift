@@ -3,9 +3,9 @@ from app.api.endpoints import upload, processing
 from app.core.config import settings
 from app.core.logging_config import setup_logging
 from loguru import logger
-
 from app.core.middleware import log_request_middleware, setup_exception_handlers
 from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 
 # Initialize Logging
 setup_logging()
@@ -19,6 +19,16 @@ app = FastAPI(
 # Add Middleware
 app.add_middleware(BaseHTTPMiddleware, dispatch=log_request_middleware)
 setup_exception_handlers(app)
+
+# Add CORS last so it runs first (outermost)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all methods
+    allow_headers=["*"],  # Allow all headers
+    expose_headers=["*"],
+)
 
 @app.get("/")
 async def root():

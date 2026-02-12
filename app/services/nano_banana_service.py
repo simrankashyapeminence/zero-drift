@@ -23,7 +23,6 @@ class NanoBananaService:
             else "MISSING"
         )
         logger.info(f"🔑 Gemini service initialized | Key: {masked}")
-        logger.info(f"🌐 Base URL: {self.base_url}")
 
     async def generate_tryon_image(self, product: ProductMetadata, image_paths: list[str], variation_index: int = 0) -> str:
         """
@@ -237,7 +236,7 @@ class NanoBananaService:
                     
                     "\n[ZERO-DRIFT GARMENT FIDELITY - ABSOLUTE REQUIREMENT]: "
                     "The model must be wearing BOTH the provided upper wear and lower wear. "
-                    "1. BRAND LOGO INTEGRITY (SMMASH): The logo 'SMMASH' on both top and bottom must be output with 100% accuracy, especially in full-body/zoomed-out views. Every character in 'SMMASH' must be crisp, perfectly legible, and identical to the source from any distance. Zero tolerance for ruined text or logo simplification in wide shots. "
+                    "1. BRAND LOGO INTEGRITY (SMMASH): The logo 'SMMASH' on both top and bottom must be output with 100% accuracy, especially in full-body/zoomed-out views. Every character in 'SMMASH' must be crisp, perfectly legible, and identical to the reference. Zero tolerance for ruined text or logo simplification in wide shots. "
                     "2. MACRO STITCHING & GEOMETRY: Maintain every stitch line, seam pattern, and hem design for BOTH products. "
                     "3. PRODUCT SHAPE & FIT: Ensure the exact silhouette, neckline, and fit for both the upper and lower garments."
                     
@@ -295,7 +294,7 @@ class NanoBananaService:
         - Generates 3 unique variations for each product or outfit.
         """
         if not products:
-            logger.warning("No products provided.")
+            logger.warning("No products provided for processing.")
             return []
 
         # 1. Group by code
@@ -339,3 +338,214 @@ class NanoBananaService:
 
         return results
 
+    # ---------------------------------------------------------
+    # Utility: Encode image safely (Added from drift branch)
+    # ---------------------------------------------------------
+    def encode_image(self, image_path: str):
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"Missing image: {image_path}")
+
+        with open(image_path, "rb") as f:
+            img_b64 = base64.b64encode(f.read()).decode("utf-8")
+
+        mime_type = "image/jpeg"
+        if image_path.lower().endswith(".png"):
+            mime_type = "image/png"
+
+        return img_b64, mime_type
+
+    # ---------------------------------------------------------
+    # Dual Garment Try-On (Added from drift branch)
+    # ---------------------------------------------------------
+    async def generate_dual_tryon(
+        self,
+        upper_product: ProductMetadata,
+        lower_product: ProductMetadata,
+        variation_index: int = 0
+    ) -> str:
+
+        max_retries = 3
+        retry_delay = 2
+
+        for attempt in range(max_retries):
+            try:
+                logger.info(
+                    f"🎯 Attempt {attempt+1} | Generating dual try-on: "
+                    f"{upper_product.product_code} + {lower_product.product_code}"
+                )
+
+                # -------------------------------------------------
+                # Encode both garments
+                # -------------------------------------------------
+                upper_path = os.path.join(settings.IMAGES_DIR, upper_product.image_filename)
+                lower_path = os.path.join(settings.IMAGES_DIR, lower_product.image_filename)
+
+                upper_b64, upper_mime = self.encode_image(upper_path)
+                lower_b64, lower_mime = self.encode_image(lower_path)
+
+                # -------------------------------------------------
+                # STRICT ZERO-DRIFT PROMPT
+                # -------------------------------------------------
+                prompt = f"""
+Task: Professional Athletic Catalog Photo.
+
+MODEL:
+Use one single {upper_product.gender} professional martial arts athlete.
+Face fully visible. No cropping.
+
+GARMENT ASSIGNMENT (STRICT):
+
+FIRST image provided:
+- Product: {upper_product.product_name}
+- MUST be worn on the UPPER BODY only.
+- Exact clone. No changes in color, logo, fit, seams, or texture.
+
+SECOND image provided:
+- Product: {lower_product.product_name}
+- MUST be worn on the LOWER BODY only.
+- Exact clone. No changes in color, logo, fit, seams, or texture.
+
+CRITICAL RULES:
+- Model must wear BOTH garments simultaneously.
+- Do NOT redesign garments.
+- Do NOT hallucinate text.
+- Do NOT change color tones.
+- Do NOT merge garments.
+- Upper stays upper.
+- Lower stays lower.
+
+SCENE:
+Professional martial arts training environment.
+Dynamic athletic pose.
+Full head and full torso visible.
+Professional DSLR quality, ultra-sharp.
+"""
+
+                payload = {
+                    "contents": [
+                        {
+                            "parts": [
+                                {"text": prompt},
+
+                                # Upper garment reference
+                                {
+                                    "inline_data": {
+                                        "mime_type": upper_mime,
+                                        "data": upper_b64
+                                    }
+                                },
+
+                                # Lower garment reference
+                                {
+                                    "inline_data": {
+                                        "mime_type": lower_mime,
+                                        "data": lower_b64
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    "generationConfig": {
+                        "temperature": 0.2,
+                        "topP": 0.95,
+                        "topK": 50,
+                        "maxOutputTokens": 32768,
+                    }
+                }
+
+                endpoint = f"{self.base_url}/models/{settings.GEMINI_MODEL_VERSION}:generateContent"
+
+                async with httpx.AsyncClient(timeout=120.0) as client:
+                    response = await client.post(
+                        endpoint,
+                        headers=self.headers,
+                        json=payload
+                    )
+
+                # -------------------------------------------------
+                # Rate limit handling
+                # -------------------------------------------------
+                if response.status_code == 429:
+                    logger.warning("⏳ Rate limited. Retrying...")
+                    await asyncio.sleep(retry_delay * (attempt + 1))
+                    continue
+
+                if response.status_code != 200:
+                    logger.error(f"❌ API Error {response.status_code}: {response.text}")
+                    raise ValueError("Gemini API failed.")
+
+                result_data = response.json()
+
+                # -------------------------------------------------
+                # Log token usage
+                # -------------------------------------------------
+                usage = result_data.get("usageMetadata", {})
+                logger.info(f"📊 Tokens used: {usage.get('totalTokenCount', 0)}")
+
+                # -------------------------------------------------
+                # Safe image extraction (FIXES YOUR ERROR)
+                # -------------------------------------------------
+                output_image_b64 = None
+
+                candidates = result_data.get("candidates", [])
+                for candidate in candidates:
+                    parts = candidate.get("content", {}).get("parts", [])
+                    for part in parts:
+                        if "inline_data" in part:
+                            output_image_b64 = part["inline_data"]["data"]
+                            break
+                        if "inlineData" in part:
+                            output_image_b64 = part["inlineData"]["data"]
+                            break
+                        if "text" in part:
+                            logger.warning(f"⚠ Model returned text: {part['text']}")
+                    if output_image_b64:
+                        break
+
+                if not output_image_b64:
+                    raise ValueError("No image data in response.")
+
+                # -------------------------------------------------
+                # Save output
+                # -------------------------------------------------
+                output_filename = (
+                    f"dual_{upper_product.product_code}_"
+                    f"{lower_product.product_code}_"
+                    f"var{variation_index}_"
+                    f"{int(time.time())}.png"
+                )
+
+                output_path = os.path.join(settings.EXPORT_DIR, output_filename)
+
+                with open(output_path, "wb") as f:
+                    f.write(base64.b64decode(output_image_b64))
+
+                logger.success(f"✅ Generated: {output_filename}")
+                return output_path
+
+            except Exception as e:
+                logger.error(f"❌ Attempt {attempt+1} failed: {str(e)}")
+                if attempt == max_retries - 1:
+                    raise e
+                await asyncio.sleep(retry_delay * (attempt + 1))
+
+    # ---------------------------------------------------------
+    # Batch Example (Pairs of Products) (Added from drift branch)
+    # ---------------------------------------------------------
+    async def batch_dual_process(self, product_pairs: list[tuple[ProductMetadata, ProductMetadata]]):
+
+        results = []
+
+        for i, (upper, lower) in enumerate(product_pairs):
+            try:
+                result = await self.generate_dual_tryon(
+                    upper_product=upper,
+                    lower_product=lower,
+                    variation_index=i
+                )
+                results.append(result)
+            except Exception as e:
+                logger.error(f"❌ Failed pair {i+1}: {e}")
+
+        logger.info(f"🏁 Batch complete | Generated {len(results)} images.")
+        return results

@@ -1,13 +1,5 @@
-fastapi
-uvicorn
-python-multipart
+streamlit
 pandas
 openpyxl
 httpx
-python-dotenv
-pydantic
-pydantic-settings
-loguru
 pillow
-python-magic; platform_system != 'Windows'
-python-magic-bin; platform_system == 'Windows'

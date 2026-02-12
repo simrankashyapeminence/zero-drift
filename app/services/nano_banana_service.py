@@ -48,30 +48,29 @@ class NanoBananaService:
                 parts = []
                 # 1. Add Prompt
                 prompt = (
-                    f"Task: High-Fidelity Athlete Catalog [Variation {variation_index + 1}]. PRODUCT: {product.product_name} for {product.sport}. "
+                    f"Task: High-Fidelity Athlete Catalog [View {variation_index + 1}]. PRODUCT: {product.product_name} for {product.sport}. "
                     
-                    "\n[STRICT LOCK - MODEL IDENTITY]: "
-                    f"You MUST use the EXACT same {product.gender} model for this product. "
-                    "The face, facial features, hair, skin tone, and body build must be identical. "
+                    + (f"\n[ACTION & POSE]: {product.pose} " if product.pose != "N/A" else f"\n[DYNAMIC SPORT ACTION]: Pose: {selected_pose}. ") +
+                    (f"\n[ENVIRONMENT]: {product.environment} " if product.environment != "N/A" else "") +
                     
+                    "\n[STRICT REQUIREMENT - MODEL IDENTITY]: "
+                    f"Use the EXACT same {product.gender} model. Face, facial features (including beard/facial hair structure), and hair must be IDENTICAL to the reference. No modifications allowed."
+                    
+                    "\n[CRITICAL - ZERO-DRIFT GARMENT REPLICATION]: "
+                    "The garment must be a 100% pixel-perfect photographic clone of the source image. "
+                    "1. LOGO & TEXT LOCK: The brand name 'SMMASH' must be IDENTICAL to the source. No character changes, no font changes, no spacing changes. If the logo is sharp in the source, it MUST be sharp in the output. "
+                    "2. SURFACE PURITY: If a surface (sleeves, back, chest) is blank in the source, it MUST remain blank. DO NOT add any extra logos. "
+                    "3. BRANDING COORDINATES: All branding must stay in its EXACT original position. No relocation. "
+                    "4. NO INTERPRETATION: Do not 'improve' or 're-draw' the logo. Mirror the pixels exactly. "
+
                     "\n[CAMERA & FRAMING]: "
                     + ("Macro details shot. " if is_close_up else "Standard shot. ") + 
-                    "STRICT: Generate ONE SINGLE model. "
-                    "CRITICAL FACE VISIBILITY: The model's COMPLETE FACE, HEAD, and HAIR must be 100% visible with significant headroom. "
-                    "NEVER crop the eyes, mouth, face, or hair. The entire face must be shown clearly and looking towards the camera or slightly away. "
-                    "UNBROKEN VIEW: Do not cut off the head at the top of the frame. Even in close-ups, the face is the most important for realism."
- 
-                    f"\n[DYNAMIC SPORT ACTION - UNIQUE POSE]: Pose: {selected_pose}. "
-                    "The model must be captured in a singular, powerful athletic moment. NO multi-view collages."
+                    "Generate ONE SINGLE model. Full face and head must be visible. Significant headroom required. "
 
-                    "\n[ZERO-DRIFT GARMENT FIDELITY - ABSOULTE REQUIREMENT]: "
-                    "The garment must be a 100% EXACT CLONE of the source image(s). "
-                    "1. BRAND LOGO INTEGRITY (SMMASH): The brand logo 'SMMASH' MUST be 100% perfectly preserved in EVERY frame, including wide or zoomed-out shots. Even from a distance, the logo must remain sharp, crisp, and perfectly legible. Every letter, font weight, and spacing of 'SMMASH' must be professional and identical to the reference. NO simplification or blurring of the logo in wide shots. "
-                    "2. MACRO STITCHING & SEAMS: Every stitch line, seam, and hem must follow the exact geometry of the original product. "
-                    "3. PRODUCT SHAPE & FIT: Maintain the exact silhouette, neckline, sleeve length, and fabric drape as seen in the references. "
-                    "4. COLOR & TEXTURE: Use the exact HEX colors and fabric weave (e.g., micro-mesh, ribbed, or dry-fit textures)."
-
-                    "\nQuality: Professional 8K photography, DSLR sharp focus, macro-detailed fabric textures, high-clarity branding."
+                    f"\n[DYNAMIC SPORT ACTION]: Pose: {selected_pose}. "
+                    "Capture a singular professional movement. No design changes. No collages."
+                    
+                    "\nQuality: Professional 8K photography, DSLR ultra-sharp focus. ZERO AI HALLUCINATION TOLERANCE."
                 )
                 parts.append({"text": prompt})
 
@@ -98,9 +97,9 @@ class NanoBananaService:
                 payload = {
                     "contents": [{"parts": parts}],
                     "generationConfig": {
-                        "temperature": 0.3, # Slightly increased for pose variety
-                        "topP": 0.99,
-                        "topK": 100,
+                        "temperature": 0.1, 
+                        "topP": 0.1, # Drastically reduced to prevent creativity
+                        "topK": 10,  # Drastically reduced
                         "maxOutputTokens": 32768,
                     }
                 }
@@ -215,32 +214,31 @@ class NanoBananaService:
                 
                 parts = []
                 prompt = (
-                    f"Task: High-Fidelity Athlete Outfit Generation [Variation {variation_index + 1}]. PRODUCT SET: Combined {sport} outfit for {gender}. "
-                    "\n[COMPOSITION]: "
-                    f"You are provided with {len(products)} total reference images to create a SINGLE result. "
-                    f"- {len(upper_wear)} image(s) show the UPPER WEAR. "
-                    f"- {len(lower_wear)} image(s) show the LOWER WEAR. "
+                    f"Task: High-Fidelity Athlete Outfit View [View {variation_index + 1}]. PRODUCT SET: Combined {sport} outfit for {gender}. "
+                    "You are provided with MULTIPLE reference images (different angles/lighting) to maximize replication accuracy. "
+                    "STUDY ALL reference images closely to ensure every detail is captured. "
+                    "Result must show BOTH Top and Bottom garments on one single model. "
                     
-                    "\n[STRICT LOCK - MODEL IDENTITY]: "
-                    f"Use a professional athletic {gender} model. Face and body build must be photorealistic. "
+                    + (f"\n[ACTION & POSE]: {products[0].pose} " if products[0].pose != "N/A" else f"\n[DYNAMIC SPORT ACTION]: Pose: {selected_pose}. ") +
+                    (f"\n[ENVIRONMENT]: {products[0].environment} " if products[0].environment != "N/A" else "") +
+
+                    "\n[STRICT REQUIREMENT - MODEL IDENTITY]: "
+                    f"Professional athletic {gender} model. Face, beard structure, and body must be IDENTICAL to the references. No cropping. "
+                    
+                    "\n[CRITICAL - ZERO-DRIFT GARMENT REPLICATION]: "
+                    "Each garment must be a 100% pixel-perfect photographic clone of its respective reference set. "
+                    "1. LOGO & TEXT LOCK: The 'SMMASH' logo must be output with 100% accuracy. Zero tolerance for character distortion or font shifts. "
+                    "2. SURFACE PURITY: Do NOT add any extra logos, patterns, or graphics. If an area is blank in the reference, it MUST be blank in the output. "
+                    "3. BRANDING LOCK: All existing branding must stay in the EXACT original positions. No relocation. "
+                    "4. SEPARATION: Maintain clear distinction between Top and Bottom. Do not merge patterns. "
                     
                     "\n[CAMERA & FRAMING]: "
-                    + ("Upper-body focus. " if is_close_up else "Full-body shot. ") +
-                    "STRICT: Generate ONE SINGLE model. "
-                    "MODEL FACE INTEGRITY: The model's FULL UNBROKEN FACE, HEAD, AND HAIR must be visible in every single frame. "
-                    "NEVER crop or cut off the model's head or face. Significant headroom is REQUIRED. "
-                    "The face must be looking forward or in a natural athletic direction, but always fully composed within the frame."
+                    + ("Upper-body focus. " if is_close_up else "Full-body shot. ") + 
+                    "Generate ONE SINGLE model. Head/face must be 100% visible with headroom. "
                     
-                    f"\n[DYNAMIC SPORT ACTION - UNIQUE POSE]: Pose: {selected_pose}. "
-                    f"Show the model in a professional, authentic {sport} pose or action. NO split-screens."
+                    f"\n[DYNAMIC SPORT ACTION]: Pose: {selected_pose}. "
                     
-                    "\n[ZERO-DRIFT GARMENT FIDELITY - ABSOLUTE REQUIREMENT]: "
-                    "The model must be wearing BOTH the provided upper wear and lower wear. "
-                    "1. BRAND LOGO INTEGRITY (SMMASH): The logo 'SMMASH' on both top and bottom must be output with 100% accuracy, especially in full-body/zoomed-out views. Every character in 'SMMASH' must be crisp, perfectly legible, and identical to the reference. Zero tolerance for ruined text or logo simplification in wide shots. "
-                    "2. MACRO STITCHING & GEOMETRY: Maintain every stitch line, seam pattern, and hem design for BOTH products. "
-                    "3. PRODUCT SHAPE & FIT: Ensure the exact silhouette, neckline, and fit for both the upper and lower garments."
-                    
-                    "\nQuality: Professional 8K photography, DSLR sharp focus, macro-detailed textures, high-clarity branding."
+                    "\nQuality: Professional 8K DSLR photography, ultra-sharp focus. NO RE-DESIGNING."
                 )
                 parts.append({"text": prompt})
 
@@ -255,7 +253,7 @@ class NanoBananaService:
 
                 payload = {
                     "contents": [{"parts": parts}],
-                    "generationConfig": {"temperature": 0.3, "topP": 0.99, "topK": 100, "maxOutputTokens": 32768}
+                    "generationConfig": {"temperature": 0.1, "topP": 0.1, "topK": 10, "maxOutputTokens": 32768}
                 }
 
                 endpoint = f"{self.base_url}/models/{settings.GEMINI_MODEL_VERSION}:generateContent"
@@ -306,7 +304,7 @@ class NanoBananaService:
         
         unique_codes = list(grouped.keys())
         num_products = len(unique_codes)
-        target_variations = 4 # Generates 2 action/hero shots and 2 close-up shots
+        target_variations = 1 # Changed to 1: Use all uploaded reference images to generate one MASTERPIECE per product/outfit
         
         results = []
 
@@ -383,42 +381,30 @@ class NanoBananaService:
                 upper_b64, upper_mime = self.encode_image(upper_path)
                 lower_b64, lower_mime = self.encode_image(lower_path)
 
-                # -------------------------------------------------
-                # STRICT ZERO-DRIFT PROMPT
-                # -------------------------------------------------
                 prompt = f"""
-Task: Professional Athletic Catalog Photo.
+Task: Professional Athlete Catalog Photo [View {variation_index + 1}].
 
-MODEL:
-Use one single {upper_product.gender} professional martial arts athlete.
-Face fully visible. No cropping.
+You are provided with MULTIPLE reference images for the garments to maximize accuracy. 
+Use all angles provided to produce one singular perfect output.
 
-GARMENT ASSIGNMENT (STRICT):
+{f'[ACTION & POSE]: {upper_product.pose}' if upper_product.pose != 'N/A' else ''}
+{f'[ENVIRONMENT]: {upper_product.environment}' if upper_product.environment != 'N/A' else ''}
 
-FIRST image provided:
-- Product: {upper_product.product_name}
-- MUST be worn on the UPPER BODY only.
-- Exact clone. No changes in color, logo, fit, seams, or texture.
+[STRICT REQUIREMENT - MODEL IDENTITY]:
+Use the IDENTICAL {upper_product.gender} martial arts model from the reference. No changes to face, facial hair structure (beard), or hair style. Face must be fully visible.
 
-SECOND image provided:
-- Product: {lower_product.product_name}
-- MUST be worn on the LOWER BODY only.
-- Exact clone. No changes in color, logo, fit, seams, or texture.
+[CRITICAL - ZERO-DRIFT GARMENT REPLICATION]:
+The resulting image must be an EXACT photographic clone of the references.
+
+1. LOGO & TEXT LOCK: Replicate the 'SMMASH' text and logo with 100% font/spacing accuracy. No hallucinations.
+2. SURFACE PURITY: If a surface is blank in the reference, it MUST remain blank. Do NOT add any extra logos.
+3. BRANDING LOCK: All existing branding must remain in the EXACT original position. 
+4. SEPARATION: Top stays on top. Bottom stays on bottom. No pattern bleeding.
 
 CRITICAL RULES:
 - Model must wear BOTH garments simultaneously.
-- Do NOT redesign garments.
-- Do NOT hallucinate text.
-- Do NOT change color tones.
-- Do NOT merge garments.
-- Upper stays upper.
-- Lower stays lower.
-
-SCENE:
-Professional martial arts training environment.
-Dynamic athletic pose.
-Full head and full torso visible.
-Professional DSLR quality, ultra-sharp.
+- No design simplification or changes.
+- Professional DSLR quality, ultra-sharp focus.
 """
 
                 payload = {
@@ -446,9 +432,9 @@ Professional DSLR quality, ultra-sharp.
                         }
                     ],
                     "generationConfig": {
-                        "temperature": 0.2,
-                        "topP": 0.95,
-                        "topK": 50,
+                        "temperature": 0.1, 
+                        "topP": 0.1, 
+                        "topK": 10,
                         "maxOutputTokens": 32768,
                     }
                 }

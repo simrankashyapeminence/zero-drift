@@ -7,7 +7,7 @@ from loguru import logger
 import os
 import time
 import shutil
-from typing import List
+from typing import List, Any
 
 router = APIRouter()
 nano_service = NanoBananaService()
@@ -35,6 +35,9 @@ async def unified_upload_and_process(
     job_id = f"job_{int(time.time())}"
 
     try:
+        if not images:
+            raise HTTPException(status_code=400, detail="No valid images uploaded.")
+
         # ---------------------------------------------------------
         # 1.Validate Excel
         # ---------------------------------------------------------
@@ -89,9 +92,16 @@ async def unified_upload_and_process(
         # ---------------------------------------------------------
         # 4️. Initialize Job State
         # ---------------------------------------------------------
+        unique_product_codes = list(set(p.product_code for p in mapped_metadata))
+        total_tasks = len(unique_product_codes)
+        
+        if len(mapped_metadata) == 2:
+            # Dual mode always results in 1 task
+            total_tasks = 1
+
         jobs[job_id] = {
             "status": "running",
-            "total_items": len(mapped_metadata),
+            "total_items": total_tasks,
             "completed_items": 0,
             "failed_items": 0,
             "results": []
@@ -104,69 +114,59 @@ async def unified_upload_and_process(
             try:
                 logger.info(f"🚀 Job {job_id} started")
 
+                results = []
+
                 # 🔹 Dual Product Mode
                 if len(mapped_metadata) == 2:
-
                     p1, p2 = mapped_metadata[0], mapped_metadata[1]
-                    name1 = p1.product_name.lower()
-                    name2 = p2.product_name.lower()
-
-                    top_keywords = [
-                        "rashguard", "shirt", "top",
-                        "hoodie", "jacket", "bra", "tank"
-                    ]
-
-                    bottom_keywords = [
-                        "leggings", "pants", "shorts",
-                        "tights", "trousers"
-                    ]
-
-                    p1_is_top = any(k in name1 for k in top_keywords)
-                    p2_is_top = any(k in name2 for k in top_keywords)
-
-                    p1_is_bottom = any(k in name1 for k in bottom_keywords)
-                    p2_is_bottom = any(k in name2 for k in bottom_keywords)
-
-                    # Smart pairing
-                    if p1_is_top and p2_is_bottom:
-                        upper, lower = p1, p2
-                    elif p2_is_top and p1_is_bottom:
-                        upper, lower = p2, p1
-                    else:
-                        # fallback: assume order
-                        upper, lower = p1, p2
-
-                    logger.info(
-                        f"👕 Dual Generation Mode | Upper={upper.product_code}, "
-                        f"Lower={lower.product_code}"
-                    )
-
-                    results = await nano_service.batch_dual_process(
-                        [(upper, lower)]
-                    )
+                    name1, name2 = p1.product_name.lower(), p2.product_name.lower()
+                    
+                    top_keywords = ["rashguard", "shirt", "top", "hoodie", "jacket", "bra", "tank"]
+                    bottom_keywords = ["leggings", "pants", "shorts", "tights", "trousers"]
+                    
+                    upper, lower = (p1, p2) if any(k in name1 for k in top_keywords) else (p2, p1)
+                    
+                    logger.info(f"👕 Dual Generation Mode | {upper.product_code} + {lower.product_code}")
+                    
+                    res_path = await nano_service.generate_dual_tryon(upper, lower, variation_index=0)
+                    results.append(res_path)
+                    
+                    # Update Progress
+                    jobs[job_id]["completed_items"] = 1
+                    jobs[job_id]["results"] = results
 
                 # 🔹 Single Product Mode
                 else:
-                    logger.info("🧍 Single Product Generation Mode")
-
-                    if hasattr(nano_service, "batch_process"):
-                        results = await nano_service.batch_process(
-                            mapped_metadata
-                        )
-                    else:
-                        raise ValueError(
-                            "Single-product generation not supported."
-                        )
+                    logger.info(f"🧍 Single Product Generation Mode | {total_tasks} products")
+                    results = []
+                    
+                    # Group by product code
+                    grouped = {}
+                    for p in mapped_metadata:
+                        if p.product_code not in grouped:
+                            grouped[p.product_code] = []
+                        grouped[p.product_code].append(p)
+                    
+                    for i, (code, group) in enumerate(grouped.items()):
+                        image_paths = [os.path.join(settings.IMAGES_DIR, p.image_filename) for p in group]
+                        logger.info(f"🔄 Processing {code} ({i+1}/{total_tasks})")
+                        
+                        try:
+                            res_path = await nano_service.generate_tryon_image(group[0], image_paths, variation_index=0)
+                            results.append(res_path)
+                            
+                            # IMMEDIATE PROGRESS UPDATE
+                            jobs[job_id]["completed_items"] = len(results)
+                            jobs[job_id]["results"] = results
+                        except Exception as e:
+                            logger.error(f"❌ Failed {code}: {e}")
+                            jobs[job_id]["failed_items"] += 1
 
                 # -------------------------------------------------
                 # 6️.Update Job State
                 # -------------------------------------------------
                 jobs[job_id]["status"] = "completed"
-                jobs[job_id]["results"] = results
-                jobs[job_id]["completed_items"] = len(results)
-                jobs[job_id]["failed_items"] = (
-                    len(mapped_metadata) - len(results)
-                )
+                # Results and completed_items are already updated in the loop
 
             except Exception as e:
                 jobs[job_id]["status"] = "failed"
@@ -178,10 +178,8 @@ async def unified_upload_and_process(
         return {
             "job_id": job_id,
             "status": "processing_started",
-            "items_count": len(mapped_metadata),
-            "mapped_products": [
-                p.product_code for p in mapped_metadata
-            ]
+            "items_count": total_tasks,
+            "mapped_products": unique_product_codes
         }
 
     except Exception as e:

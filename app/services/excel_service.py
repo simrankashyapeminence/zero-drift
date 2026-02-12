@@ -19,7 +19,9 @@ class ExcelService:
                 'product_name': ['product_name', 'name', 'title', 'nazwa_handlowa', 'opis'],
                 'product_type': ['product_type', 'type', 'category', 'type_of_product', 'rodzaj'],
                 'gender': ['płeć', 'gender', 'sex'],
-                'sport': ['sport_dominujący', 'sport', 'discipline']
+                'sport': ['sport_dominujący', 'sport', 'discipline'],
+                'pose': ['pose', 'action', 'position', 'poza'],
+                'environment': ['environment', 'background', 'location', 'scene', 'otoczenie']
             }
             
             results = []
@@ -58,8 +60,14 @@ class ExcelService:
         mapped_results = []
         
         for img_filename in image_files:
-            # "RSO3-1.png" -> "RSO31"
-            img_base = os.path.splitext(img_filename)[0]
+            # Strip the timestamp prefix (e.g., "1712345678_image.jpg" -> "image.jpg")
+            # We assume the unique prefix is digits followed by an underscore
+            display_name = img_filename
+            match = re.match(r'^\d+_(.*)', img_filename)
+            if match:
+                display_name = match.group(1)
+            
+            img_base = os.path.splitext(display_name)[0]
             clean_img_name = deep_clean(img_base)
             match_found = False
             
@@ -78,8 +86,8 @@ class ExcelService:
                     
                     # Match logic:
                     # 1. Exact clean match
-                    # 2. Excel code is at the START of the filename (e.g. "RSO3" in "RSO3-1")
-                    # 3. Filename is part of Excel code (e.g. "RSO3" in "RSO3_BLACK")
+                    # 2. Excel code is at the START of the filename
+                    # 3. Filename is part of Excel code
                     if clean_val == clean_img_name or \
                        clean_img_name.startswith(clean_val) or \
                        clean_val.startswith(clean_img_name):
@@ -95,6 +103,8 @@ class ExcelService:
                             product_type=final_type if final_type != "N/A" else "Fashion",
                             gender=final_gender,
                             sport=final_sport,
+                            pose=str(row_dict.get('pose', 'N/A')),
+                            environment=str(row_dict.get('environment', 'N/A')),
                             image_filename=img_filename
                         )
                         mapped_results.append(meta_obj)
@@ -120,6 +130,8 @@ class ExcelService:
                                         product_type=str(row_dict.get('product_type', 'Garment')),
                                         gender=str(row_dict.get('gender', 'N/A')),
                                         sport=str(row_dict.get('sport', 'N/A')),
+                                        pose=str(row_dict.get('pose', 'N/A')),
+                                        environment=str(row_dict.get('environment', 'N/A')),
                                         image_filename=img_filename
                                     ))
                                     logger.success(f"🎯 PREFIX MATCH: '{img_filename}' matched by prefix '{prefix}'")

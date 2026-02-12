@@ -7,6 +7,8 @@ class ProductMetadata(BaseModel):
     product_type: str
     gender: Optional[str] = "N/A"
     sport: Optional[str] = "N/A"
+    pose: Optional[str] = "N/A"
+    environment: Optional[str] = "N/A"
     image_filename: Optional[str] = None
     status: str = "pending"
     result_url: Optional[str] = None

@@ -353,14 +353,16 @@ class NanoBananaService:
                     
                     f"\n\n[SCENE SETUP]: "
                     f"Professional catalog photo — complete {sport} outfit for {gender}. "
-                    "ONE model wearing BOTH garments as a complete outfit. "
+                    "ONE SINGLE model wearing BOTH garments as a complete outfit. "
+                    "ABSOLUTELY NO SECOND PERSON. NO BACKGROUND MODELS. NO CROWD. JUST ONE PERSON. "
                     f"\n{pose_text}"
                     f"\n{env_text}"
 
                     f"\n\n[MODEL]: "
                     f"ONE single {gender} athletic model, ALONE. "
+                    "The model is the SOLE subject. No training partners. No opponents. "
                     "Full head, face, and hair completely visible — NEVER crop the top of the head. "
-                    "Leave generous headroom. No other people. "
+                    "Leave generous headroom. "
 
                     "\n\n[BODY & MODESTY]: "
                     "Clothing fits naturally. NO visible outline of private body parts. "

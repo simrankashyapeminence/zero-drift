@@ -308,29 +308,25 @@ class NanoBananaService:
     async def generate_outfit_image(self, products: list[ProductMetadata], variation_index: int = 0) -> str:
         """
         Calls Gemini with multiple reference images to generate a single cohesive outfit in a specific pose.
+        Uses Zero-Drift logic.
         """
         max_retries = 3
-        retry_delay = 5
+        retry_delay = 2
 
-        # Group products to describe them in the prompt
-        upper_keywords = ["GÓRA", "KOSZULKA", "SHIRT", "SWEATSHIRT", "JACKET", "TOP"]
-        lower_keywords = ["DÓŁ", "SPODNIE", "PANTS", "LEGGINSY", "LEGGINGS", "SHORTS", "SUKIENKA"]
-
-        upper_wear = [p for p in products if any(k in str(p.product_type).upper() or k in str(p.product_name).upper() for k in upper_keywords)]
-        lower_wear = [p for p in products if any(k in str(p.product_type).upper() or k in str(p.product_name).upper() for k in lower_keywords)]
-        
-        if not upper_wear or not lower_wear:
-            unique_codes = list(set([p.product_code for p in products]))
-            if len(unique_codes) == 2:
-                upper_wear = [p for p in products if p.product_code == unique_codes[0]]
-                lower_wear = [p for p in products if p.product_code == unique_codes[1]]
-            else:
-                mid = len(products) // 2
-                upper_wear = products[:mid]
-                lower_wear = products[mid:]
-
+        # Group products to describe them in the prompt - simplified logic
         sport = products[0].sport
         gender = products[0].gender
+
+        # Build pose and environment from metadata
+        if products[0].pose != "N/A":
+            pose_text = f"[POSE]: {products[0].pose}. The model must be ALONE — no other person."
+        else:
+            pose_text = f"[POSE]: The model is a {sport} athlete in a mid-action pose that clearly shows they practice {sport}. Not a stiff formal pose — the model should look athletic and in motion, like a real {sport} athlete during light training or warm-up. Keep it natural and moderate — not too extreme, not too static. The model must be ALONE."
+
+        if products[0].environment != "N/A":
+            env_text = f"[ENVIRONMENT]: {products[0].environment}."
+        else:
+            env_text = f"[ENVIRONMENT]: Choose a professional environment that naturally fits {sport}. Clean, well-lit, realistic."
 
         for attempt in range(max_retries):
             try:
@@ -338,63 +334,96 @@ class NanoBananaService:
                 
                 parts = []
                 prompt = (
-                    f"Task: High-Fidelity Athlete Outfit View [View {variation_index + 1}]. PRODUCT SET: Combined {sport} outfit for {gender}. "
-                    "You are provided with MULTIPLE reference images (different angles/lighting) to maximize replication accuracy. "
-                    "STUDY ALL reference images closely to ensure every detail is captured. "
-                    "Result must show BOTH Top and Bottom garments on one single model. "
+                    f"[ZERO-DRIFT PRODUCT REPLICATION — THIS IS THE MOST IMPORTANT INSTRUCTION]: "
+                    "You are given reference photos of TWO real products (upper and lower garments). "
+                    "Your output image MUST contain these EXACT SAME products — ZERO changes allowed. "
+                    "Each product must be a pixel-perfect copy of its reference: "
+                    "same design, same colors, same patterns, same graphics, same logos, same text, same everything. "
+                    "If a product has a logo or brand name text, it must appear EXACTLY as in the reference — "
+                    "same letters, same font, same size, same position, same color. "
+                    "\nCRITICAL TEXT RULES: "
+                    "1. DO NOT 'read' the text. Treat any text on the garment as abstract geometric SHAPES and SYMBOLS. "
+                    "2. Trace these shapes pixel-for-pixel. Do not try to spell-check, correct, or re-type them. "
+                    "3. If the text looks like 'SMMASH' or any other brand, copy the exact curves and lines of the letters. "
+                    "4. DO NOT redraw, retype, reinterpret, resize, relocate, blur, distort, or modify ANY element on the product. "
+                    "5. Even if the text is small or distant, it must remain SHARP and IDENTICAL to the reference. "
+                    "If an area is plain/blank, keep it plain/blank. "
+                    "Upper garment stays on top. Lower garment stays on bottom. No pattern bleeding. "
+                    "ZERO DRIFT from the references. "
                     
-                    + (f"\n[ACTION & POSE]: {products[0].pose} " if products[0].pose != "N/A" else f"\n[DYNAMIC SPORT ACTION]: Pose: {selected_pose}. ") +
-                    (f"\n[ENVIRONMENT]: {products[0].environment} " if products[0].environment != "N/A" else "") +
+                    f"\n\n[SCENE SETUP]: "
+                    f"Professional catalog photo — complete {sport} outfit for {gender}. "
+                    "ONE model wearing BOTH garments as a complete outfit. "
+                    f"\n{pose_text}"
+                    f"\n{env_text}"
 
-                    "\n[STRICT REQUIREMENT - MODEL IDENTITY]: "
-                    f"Professional athletic {gender} model. Face, beard structure, and body must be IDENTICAL to the references. No cropping. "
-                    
-                    "\n[CRITICAL - ZERO-DRIFT GARMENT REPLICATION]: "
-                    "Each garment must be a 100% pixel-perfect photographic clone of its respective reference set. "
-                    "1. LOGO & TEXT LOCK: The 'SMMASH' logo must be output with 100% accuracy. Zero tolerance for character distortion or font shifts. "
-                    "2. SURFACE PURITY: Do NOT add any extra logos, patterns, or graphics. If an area is blank in the reference, it MUST be blank in the output. "
-                    "3. BRANDING LOCK: All existing branding must stay in the EXACT original positions. No relocation. "
-                    "4. SEPARATION: Maintain clear distinction between Top and Bottom. Do not merge patterns. "
-                    
-                    "\n[CAMERA & FRAMING]: "
-                    + ("Upper-body focus. " if is_close_up else "Full-body shot. ") + 
-                    "Generate ONE SINGLE model. Head/face must be 100% visible with headroom. "
-                    
-                    f"\n[DYNAMIC SPORT ACTION]: Pose: {selected_pose}. "
-                    
-                    "\nQuality: Professional 8K DSLR photography, ultra-sharp focus. NO RE-DESIGNING."
+                    f"\n\n[MODEL]: "
+                    f"ONE single {gender} athletic model, ALONE. "
+                    "Full head, face, and hair completely visible — NEVER crop the top of the head. "
+                    "Leave generous headroom. No other people. "
+
+                    "\n\n[BODY & MODESTY]: "
+                    "Clothing fits naturally. NO visible outline of private body parts. "
+                    "Professional catalog standard. "
+
+                    "\n\n[ANATOMY]: "
+                    "Correct anatomy — 2 arms, 2 legs, 5 fingers per hand. No extra limbs. "
+
+                    "\n\n[FRAMING]: "
+                    "Full-body shot, head to toe. ONE model. No collages. No grids. "
+
+                    "\n\n[QUALITY]: Ultra-high resolution, 8K DSLR, razor-sharp focus on product details and logos."
                 )
                 parts.append({"text": prompt})
 
                 from app.utils.image_processor import ImageProcessor
                 for p in products:
                     image_path = os.path.join(settings.IMAGES_DIR, p.image_filename)
-                    opt_path = ImageProcessor.optimize_for_api(image_path, max_size=(4096, 4096))
-                    with open(opt_path, "rb") as f:
-                        img_data = base64.b64encode(f.read()).decode("utf-8")
-                    mime_type = "image/png" if opt_path.lower().endswith(".png") else "image/jpeg"
-                    parts.append({"inline_data": {"mime_type": mime_type, "data": img_data}})
+                    if os.path.exists(image_path):
+                        opt_path = ImageProcessor.optimize_for_api(image_path, max_size=(4096, 4096))
+                        with open(opt_path, "rb") as f:
+                            img_data = base64.b64encode(f.read()).decode("utf-8")
+                        mime_type = "image/png" if opt_path.lower().endswith(".png") else "image/jpeg"
+                        parts.append({"inline_data": {"mime_type": mime_type, "data": img_data}})
 
                 payload = {
                     "contents": [{"parts": parts}],
-                    "generationConfig": {"temperature": 0.1, "topP": 0.1, "topK": 10, "maxOutputTokens": 32768}
+                    "generationConfig": {
+                        "temperature": 0.0,
+                        "topP": 0.1,
+                        "topK": 5,
+                        "maxOutputTokens": 32768,
+                        "responseModalities": ["TEXT", "IMAGE"],
+                    }
                 }
 
                 endpoint = f"{self.base_url}/models/{settings.GEMINI_MODEL_VERSION}:generateContent"
                 async with httpx.AsyncClient(timeout=180.0) as client:
                     response = await client.post(endpoint, headers=self.headers, json=payload)
-                    if response.status_code != 200: raise ValueError(f"API Error ({response.status_code}): {response.text}")
+                    if response.status_code == 429:
+                        logger.warning("Rate limit hit. Waiting...")
+                        await asyncio.sleep(5)
+                        continue
+                    
+                    if response.status_code != 200: 
+                        raise ValueError(f"API Error ({response.status_code}): {response.text[:200]}")
 
                     result_data = response.json()
-                    candidate = result_data["candidates"][0]
-                    content = candidate.get("content", {})
-                    output_image_b64 = None
-                    for part in content.get("parts", []):
-                        if "inline_data" in part or "inlineData" in part:
-                            output_image_b64 = part.get("inline_data", part.get("inlineData"))["data"]
-                            break
                     
-                    if not output_image_b64: raise ValueError("No image data in response.")
+                    # Extract image
+                    output_image_b64 = None
+                    try:
+                        candidates = result_data.get("candidates", [])
+                        if candidates:
+                            for part in candidates[0].get("content", {}).get("parts", []):
+                                if "inline_data" in part or "inlineData" in part:
+                                    output_image_b64 = part.get("inline_data", part.get("inlineData"))["data"]
+                                    break
+                    except:
+                        pass
+                    
+                    if not output_image_b64:
+                         raise ValueError("No image data in response.")
 
                     output_filename = f"res_outfit_{int(time.time())}.png"
                     output_path = os.path.join(settings.EXPORT_DIR, output_filename)

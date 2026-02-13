@@ -371,25 +371,26 @@ if start_btn and excel_file and uploaded_images and api_key:
                 if idx == 0:
                     primary_image_path = os.path.abspath(save_path)
             
-            # Create Metadata Object
-            # Note: We pass the ABSOLUTE PATH as the filename.
-            # The service's os.path.join(settings.IMAGES_DIR, p.image_filename) will resolve to absolute path.
+            # Create Metadata Object for EACH saved image to maximize accuracy
+            # Backend will re-group them by product code.
+            for path in saved_paths:
+                meta = ProductMetadata(
+                    product_code=str(product_info.get('product_code', 'N/A')),
+                    product_name=str(product_info.get('product_name', 'N/A')),
+                    product_type=str(product_info.get('product_type', 'N/A')),
+                    gender=str(product_info.get('gender', 'N/A')),
+                    sport=str(product_info.get('sport', 'N/A')),
+                    pose=str(product_info.get('pose', 'N/A')),
+                    environment=str(product_info.get('environment', 'N/A')),
+                    image_filename=os.path.abspath(path) 
+                )
+                batch_products.append(meta)
             
-            meta = ProductMetadata(
-                product_code=str(product_info.get('product_code', 'N/A')),
-                product_name=str(product_info.get('product_name', 'N/A')),
-                product_type=str(product_info.get('product_type', 'N/A')),
-                gender=str(product_info.get('gender', 'N/A')),
-                sport=str(product_info.get('sport', 'N/A')),
-                pose=str(product_info.get('pose', 'N/A')),
-                environment=str(product_info.get('environment', 'N/A')),
-                image_filename=primary_image_path 
-            )
-            batch_products.append(meta)
             temp_files_to_cleanup.append(temp_dir) # directory to clean later
             
         # CALL BATCH PROCESS
-        status_text.info(f"🚀 AI Processing started for {len(batch_products)} products...")
+        # Log unique products count instead of total metadata count to avoid confusion
+        status_text.info(f"🚀 AI Processing started for {len(grouped)} unique product(s) using {len(batch_products)} reference images...")
         loop = asyncio.new_event_loop()
         generated_paths = loop.run_until_complete(service.batch_process(batch_products))
         loop.close()

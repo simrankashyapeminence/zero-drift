@@ -316,44 +316,121 @@ if start_btn and excel_file and uploaded_images and api_key:
     results_container = st.container()
     
     # 4. Generate for each product
-    for i, (code, data) in enumerate(grouped.items()):
-        status_text.info(f"⚙️ Generating **{code}** ({i+1}/{total_products})...")
+    # 4. Aggregate products for SMART BATCH PROCESSING
+    # Instead of looping one-by-one, we send ALL products to the backend.
+    # The backend will decide: Same Sport? -> Combine into Outfit. Different? -> Separate.
+    
+    status_text.info("📦 Preparing batch for AI processing...")
+    
+    # We need to instantiate the service here to use batch_process
+    # Note: Environment variables for API key are already set in top of gui.py
+    from app.services.nano_banana_service import NanoBananaService
+    from app.models.metadata import ProductMetadata
+    
+    service = NanoBananaService()
+    batch_products = []
+    
+    # Helper to save temp files and create metadata objects
+    temp_files_to_cleanup = []
+    
+    try:
+        current_time = int(time.time())
+        temp_dir = f"temp_upload_{current_time}"
+        os.makedirs(temp_dir, exist_ok=True)
         
-        # Run async generation
+        for code, data in grouped.items():
+            product_info = data['info']
+            image_list = data['images'] # List of (bytes, name)
+            
+            # Save first image as primary reference (or handle multiple in service)
+            # Service expects ONE image_filename per product metadata currently?
+            # NanoBananaService.generate_tryon_image takes `image_paths` list.
+            # But ProductMetadata has `image_filename`.
+            # Let's save all images, but metadata only holds primary.
+            # Actually, batch_process uses `p.image_filename`.
+            
+            # We'll save the first image as the primary one for the metadata
+            primary_image_path = ""
+            saved_paths = []
+            
+            for idx, (img_bytes, img_name) in enumerate(image_list):
+                # Clean filename
+                clean_name = f"{code}_{idx}_{int(time.time())}.png"
+                save_path = os.path.join(temp_dir, clean_name)
+                with open(save_path, "wb") as f:
+                    f.write(img_bytes)
+                saved_paths.append(save_path)
+                
+                # We also need to copy/link to settings.IMAGES_DIR because service looks there?
+                # Service code: image_paths = [os.path.join(settings.IMAGES_DIR, p.image_filename) for p in group]
+                # We need to ensure settings.IMAGES_DIR (uploads/images) has these files OR hack it.
+                # Service uses os.path.join, so if filename is absolute path, it might fail or work?
+                # os.path.join("dir", "/abs/path") -> "/abs/path" (on Linux).
+                # So we can put absolute path in metadata.image_filename!
+                
+                if idx == 0:
+                    primary_image_path = os.path.abspath(save_path)
+            
+            # Create Metadata Object
+            # Note: We pass the ABSOLUTE PATH as the filename.
+            # The service's os.path.join(settings.IMAGES_DIR, p.image_filename) will resolve to absolute path.
+            
+            meta = ProductMetadata(
+                product_code=str(product_info.get('product_code', 'N/A')),
+                product_name=str(product_info.get('product_name', 'N/A')),
+                product_type=str(product_info.get('product_type', 'N/A')),
+                gender=str(product_info.get('gender', 'N/A')),
+                sport=str(product_info.get('sport', 'N/A')),
+                pose=str(product_info.get('pose', 'N/A')),
+                environment=str(product_info.get('environment', 'N/A')),
+                image_filename=primary_image_path 
+            )
+            batch_products.append(meta)
+            temp_files_to_cleanup.append(temp_dir) # directory to clean later
+            
+        # CALL BATCH PROCESS
+        status_text.info(f"🚀 AI Processing started for {len(batch_products)} products...")
         loop = asyncio.new_event_loop()
-        img_bytes, error = loop.run_until_complete(
-            generate_image(data['info'], data['images'])
-        )
+        generated_paths = loop.run_until_complete(service.batch_process(batch_products))
         loop.close()
         
-        if img_bytes:
-            st.session_state.results.append({
-                'code': code,
-                'name': data['info']['product_name'],
-                'image_bytes': img_bytes
-            })
-            progress_bar.progress((i + 1) / total_products)
-            
-            # Show result immediately
-            with results_container:
-                img = Image.open(BytesIO(img_bytes))
-                cols = st.columns([2, 1])
-                with cols[0]:
-                    st.image(img, use_container_width=True, caption=f"{code} - {data['info']['product_name']}")
-                with cols[1]:
-                    st.download_button(
-                        label=f"📥 Download {code}",
-                        data=img_bytes,
-                        file_name=f"zero_drift_{code}.png",
-                        mime="image/png",
-                        key=f"dl_{code}"
-                    )
-        else:
-            st.warning(f"⚠️ Failed for {code}: {error}")
+        # Display Results
+        progress_bar.progress(1.0)
         
-        # Small delay between requests
-        if i < total_products - 1:
-            time.sleep(2)
+        if not generated_paths:
+            st.warning("⚠️ No images were generated. Check logs.")
+        
+        for path in generated_paths:
+            if os.path.exists(path):
+                file_name = os.path.basename(path)
+                with open(path, "rb") as f:
+                    img_bytes = f.read()
+                
+                # Add to history
+                st.session_state.results.append({
+                    'code': file_name, # Use filename as code since it might be outfit
+                    'name': "AI Generated",
+                    'image_bytes': img_bytes
+                })
+                
+                with results_container:
+                     st.image(img_bytes, caption=file_name, use_container_width=True)
+                     st.download_button(
+                        label=f"📥 Download {file_name}",
+                        data=img_bytes,
+                        file_name=file_name,
+                        mime="image/png"
+                     )
+            else:
+                st.error(f"Generated file not found: {path}")
+
+    except Exception as e:
+        st.error(f"Pipeline Error: {str(e)}")
+        # Cleanup can happen here logic
+    
+    # Cleanup temp
+    # shutil.rmtree(temp_dir) if needed
+    status_text.success("✅ Batch Processing Complete!")
     
     # Done
     progress_bar.progress(1.0)

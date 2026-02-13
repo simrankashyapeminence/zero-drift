@@ -498,7 +498,7 @@ class NanoBananaService:
         
         # Case 2: Different sports OR individual products -> Process separately
         if num_products >= 2:
-            logger.info(f"🔀 Mixed sports detected ({unique_sports}). Processing {num_products} products individually.")
+            logger.info(f"🔀 Mixed sports detected ({sports_normalized}). Processing {num_products} products individually.")
         else:
             logger.info(f"🚀 Processing single product. Target: {target_variations} poses.")
 

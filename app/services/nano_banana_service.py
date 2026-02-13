@@ -465,8 +465,10 @@ class NanoBananaService:
         
         results = []
 
-        # Check if all products belong to the EXACT same sport/category
-        unique_sports = set(p.sport for p in products)
+        # Check if all products belong to the SAME sport/category (Normalize strings)
+        # Using strip().upper() to handle "MMA " vs "MMA" or "mma" differences
+        sports_normalized = [str(p.sport).strip().upper() for p in products]
+        unique_sports = set(sports_normalized)
         is_consistent_outfit = (len(unique_sports) == 1)
 
         # Case 1: Multiple products for the SAME sport -> Combined Outfit

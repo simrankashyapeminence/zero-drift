@@ -17,6 +17,15 @@ class NanoBananaService:
             "Content-Type": "application/json",
             "x-goog-api-key": self.api_key,
         }
+        
+        # Ensure export directory exists
+        if not os.path.exists(settings.EXPORT_DIR):
+            try:
+                os.makedirs(settings.EXPORT_DIR, exist_ok=True)
+                logger.info(f"📁 Created export directory: {settings.EXPORT_DIR}")
+            except Exception as e:
+                logger.error(f"❌ Failed to create export directory: {e}")
+
         masked = (
             f"{self.api_key[:6]}...{self.api_key[-4:]}"
             if self.api_key

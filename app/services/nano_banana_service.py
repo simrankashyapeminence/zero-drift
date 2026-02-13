@@ -457,33 +457,48 @@ class NanoBananaService:
         
         unique_codes = list(grouped.keys())
         num_products = len(unique_codes)
-        target_variations = 1 # Changed to 1: Use all uploaded reference images to generate one MASTERPIECE per product/outfit
+        target_variations = 3  # Generating 3 variations per user request
         
         results = []
 
-        # Case 1: Exactly 2 different products -> Try to make an outfit
-        if num_products == 2:
-            logger.info(f"🎯 2 products detected. Generating {target_variations} unique outfit poses...")
+        # Check if all products belong to the EXACT same sport/category
+        unique_sports = set(p.sport for p in products)
+        is_consistent_outfit = (len(unique_sports) == 1)
+
+        # Case 1: Multiple products for the SAME sport -> Combined Outfit
+        if num_products >= 2 and is_consistent_outfit:
+            sport_name = list(unique_sports)[0]
+            logger.info(f"🎯 Multi-product outfit detected for {sport_name}. Generating {target_variations} unique combined poses...")
+            
             for v_idx in range(target_variations):
                 try:
                     result_path = await self.generate_outfit_image(products, variation_index=v_idx)
                     results.append(result_path)
                     # Small throttle between variations
-                    await asyncio.sleep(5)
+                    await asyncio.sleep(2)
                 except Exception as e:
                     logger.error(f"Outfit pose {v_idx+1} failed: {e}")
             return results
         
-        # Case 2: Individual products (single or multiple unique codes)
-        logger.info(f"🚀 Batching {num_products} unique products. Target: {target_variations} poses each.")
+        # Case 2: Different sports OR individual products -> Process separately
+        if num_products >= 2:
+            logger.info(f"🔀 Mixed sports detected ({unique_sports}). Processing {num_products} products individually.")
+        else:
+            logger.info(f"🚀 Processing single product. Target: {target_variations} poses.")
+
         for code, group in grouped.items():
+            # Collect all images for this product code
             image_paths = [os.path.join(settings.IMAGES_DIR, p.image_filename) for p in group]
+            # Use the metadata from the first item in the group (they share the code)
+            product_meta = group[0]
+            
             for v_idx in range(target_variations):
-                logger.info(f"🔄 Generating {code} | Pose Variation {v_idx+1}/{target_variations}")
+                logger.info(f"🔄 Generating {code} ({product_meta.sport}) | Pose Variation {v_idx+1}/{target_variations}")
                 try:
-                    result_path = await self.generate_tryon_image(group[0], image_paths, variation_index=v_idx)
+                    # Pass the specific product metadata which includes the correct sport/pose/env
+                    result_path = await self.generate_tryon_image(product_meta, image_paths, variation_index=v_idx)
                     results.append(result_path)
-                    await asyncio.sleep(5)
+                    await asyncio.sleep(2)
                 except Exception as e:
                     logger.error(f"Failed Variation {v_idx+1} for {code}: {e}")
 

@@ -459,7 +459,7 @@ class NanoBananaService:
         
         unique_codes = list(grouped.keys())
         num_products = len(unique_codes)
-        target_variations = 3  # Generating 3 variations per user request
+        target_variations = 1  # Generating ONLY 1 high-accuracy image as per user request
         
         results = []
 

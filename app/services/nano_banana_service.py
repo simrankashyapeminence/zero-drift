@@ -467,13 +467,23 @@ class NanoBananaService:
 
         # Check if all products belong to the SAME sport/category (Normalize strings)
         # Using strip().upper() to handle "MMA " vs "MMA" or "mma" differences
-        sports_normalized = [str(p.sport).strip().upper() for p in products]
-        unique_sports = set(sports_normalized)
-        is_consistent_outfit = (len(unique_sports) == 1)
+        # Also ignore "N/A" or empty strings - if one is "MMA" and other is "N/A", treat as match.
+        sports_normalized = set()
+        for p in products:
+            s_clean = str(p.sport).strip().upper()
+            if s_clean and s_clean != "N/A":
+                sports_normalized.add(s_clean)
+        
+        # If set is empty (all N/A) or has 1 element, it's consistent.
+        is_consistent_outfit = (len(sports_normalized) <= 1)
+        
+        if len(sports_normalized) == 0:
+            sport_name = "General Sport"
+        else:
+            sport_name = list(sports_normalized)[0]
 
         # Case 1: Multiple products for the SAME sport -> Combined Outfit
         if num_products >= 2 and is_consistent_outfit:
-            sport_name = list(unique_sports)[0]
             logger.info(f"🎯 Multi-product outfit detected for {sport_name}. Generating {target_variations} unique combined poses...")
             
             for v_idx in range(target_variations):

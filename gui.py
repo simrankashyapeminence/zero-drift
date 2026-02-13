@@ -160,117 +160,74 @@ def match_images_to_metadata(metadata_list, image_files):
     return mapped
 
 # --- GEMINI IMAGE GENERATION ---
-async def generate_image(product_info, image_data_list):
-    """Call Gemini API directly to generate a try-on image."""
-    api_key = get_api_key()
-    base_url = get_base_url()
-    model = get_model_version()
+# --- GEMINI IMAGE GENERATION (VIA BACKEND SERVICE) ---
+async def generate_image(product_info_dict, image_data_list):
+    """
+    Call the backend NanoBananaService to generate the image.
+    This ensures we use the EXACT SAME prompt logic as the API.
+    """
+    import tempfile
+    import shutil
+    from app.services.nano_banana_service import NanoBananaService
+    from app.models.metadata import ProductMetadata
+    from app.core.config import settings
     
-    if not api_key:
-        return None, "API key not configured. Add NANO_BANANA_API_KEY to Streamlit secrets."
+    # 1. Initialize Service
+    service = NanoBananaService()
     
-    poses = [
-        "Dynamic fighting stance with fists raised",
-        "Power kick mid-air action shot",
-        "Professional standing pose, arms crossed",
-        "Training warmup stretch pose",
-        "Victory celebration pose"
-    ]
-    selected_pose = poses[hash(product_info['product_code']) % len(poses)]
-    
-    # Build prompt
-    pose_text = (f"\n[ACTION & POSE]: {product_info['pose']} " 
-                 if product_info.get('pose', 'N/A') != 'N/A' 
-                 else f"\n[DYNAMIC SPORT ACTION]: Pose: {selected_pose}. ")
-    
-    env_text = (f"\n[ENVIRONMENT]: {product_info['environment']} " 
-                if product_info.get('environment', 'N/A') != 'N/A' 
-                else "")
-    
-    prompt = (
-        f"Task: High-Fidelity Athlete Catalog Photo. PRODUCT: {product_info['product_name']} for {product_info['sport']}. "
-        + pose_text + env_text +
-        f"\n[STRICT REQUIREMENT - MODEL IDENTITY]: "
-        f"Use the EXACT same {product_info['gender']} model. Face, facial features (including beard/facial hair structure), and hair must be IDENTICAL to the reference. No modifications allowed."
-        
-        "\n[CRITICAL - ZERO-DRIFT GARMENT REPLICATION]: "
-        "The garment must be a 100% pixel-perfect photographic clone of the source image. "
-        "1. LOGO & TEXT LOCK: The brand name 'SMMASH' must be IDENTICAL to the source. No character changes, no font changes, no spacing changes. "
-        "2. SURFACE PURITY: If a surface is blank in the source, it MUST remain blank. DO NOT add any extra logos. "
-        "3. BRANDING COORDINATES: All branding must stay in its EXACT original position. No relocation. "
-        "4. NO INTERPRETATION: Do not 'improve' or 're-draw' the logo. Mirror the pixels exactly. "
+    # 2. Create ProductMetadata object
+    try:
+        product = ProductMetadata(
+            product_code=product_info_dict.get('product_code', 'UNKNOWN'),
+            product_name=product_info_dict.get('product_name', 'Product'),
+            product_type=product_info_dict.get('product_type', 'Fashion'),
+            gender=product_info_dict.get('gender', 'Unisex'),
+            sport=product_info_dict.get('sport', 'General'),
+            pose=product_info_dict.get('pose', 'N/A'),
+            environment=product_info_dict.get('environment', 'N/A'),
+            image_filename="temp.png" # Placeholder
+        )
+    except Exception as e:
+        return None, f"Metadata validation failed: {e}"
 
-        "\n[CAMERA & FRAMING]: "
-        "Standard shot. Generate ONE SINGLE model. Full face and head must be visible. Significant headroom required. "
-        "Capture a singular professional movement. No design changes. No collages."
-        
-        "\nQuality: Professional 8K photography, DSLR ultra-sharp focus. ZERO AI HALLUCINATION TOLERANCE."
-    )
-    
-    # Build parts
-    parts = [{"text": prompt}]
-    
-    for img_bytes, img_name in image_data_list:
-        img_b64 = base64.b64encode(img_bytes).decode("utf-8")
-        mime = "image/png" if img_name.lower().endswith(".png") else "image/jpeg"
-        parts.append({
-            "inline_data": {
-                "mime_type": mime,
-                "data": img_b64
-            }
-        })
-    
-    payload = {
-        "contents": [{"parts": parts}],
-        "generationConfig": {
-            "temperature": 0.1,
-            "topP": 0.1,
-            "topK": 10,
-            "maxOutputTokens": 32768,
-        }
-    }
-    
-    endpoint = f"{base_url}/models/{model}:generateContent"
-    headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
+    # 3. Save uploaded images to temp files
+    temp_dir = tempfile.mkdtemp()
+    image_paths = []
     
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            response = await client.post(endpoint, headers=headers, json=payload)
+        for idx, (img_bytes, img_name) in enumerate(image_data_list):
+            # Clean filename
+            safe_name = "".join([c for c in img_name if c.isalnum() or c in ('-', '_', '.')])
+            temp_path = os.path.join(temp_dir, safe_name)
+            with open(temp_path, "wb") as f:
+                f.write(img_bytes)
+            image_paths.append(temp_path)
+        
+        # 4. Call Service
+        # We use generate_tryon_image for single items
+        # Ensure we're in an async context
+        try:
+            output_path = await service.generate_tryon_image(
+                product=product,
+                image_paths=image_paths,
+                variation_index=0
+            )
             
-            if response.status_code == 429:
-                return None, "Rate limited. Please wait a moment and try again."
-            
-            if response.status_code != 200:
-                return None, f"API Error ({response.status_code}): {response.text[:200]}"
-            
-            result_data = response.json()
-            
-            # Extract image from response
-            try:
-                candidate = result_data["candidates"][0]
-                content = candidate.get("content", {})
-                parts_resp = content.get("parts", [])
+            if output_path and os.path.exists(output_path):
+                with open(output_path, "rb") as f:
+                    result_bytes = f.read()
+                return result_bytes, None
+            else:
+                return None, "Service returned complete status but no output file found."
                 
-                for part in parts_resp:
-                    if "inline_data" in part or "inlineData" in part:
-                        img_data = part.get("inline_data", part.get("inlineData"))
-                        img_bytes = base64.b64decode(img_data["data"])
-                        return img_bytes, None
-                
-                # No image found - check text response
-                text_resp = ""
-                for part in parts_resp:
-                    if "text" in part:
-                        text_resp += part["text"]
-                return None, f"No image generated. Response: {text_resp[:200]}"
-                
-            except (KeyError, IndexError) as e:
-                return None, f"Failed to parse response: {str(e)}"
-                
-    except httpx.TimeoutException:
-        return None, "Request timed out. The image generation took too long."
+        except Exception as e:
+            return None, f"Service Generation Error: {str(e)}"
+
     except Exception as e:
-        return None, f"Connection error: {str(e)}"
+        return None, f"Temp file error: {str(e)}"
+    finally:
+        # Cleanup temp upload files
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 # --- SESSION STATE ---
 if "results" not in st.session_state:

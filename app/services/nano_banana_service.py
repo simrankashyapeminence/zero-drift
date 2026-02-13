@@ -31,46 +31,65 @@ class NanoBananaService:
         max_retries = 3
         retry_delay = 2 
 
-        # Dynamic Pose Logic with Close-ups
-        poses = [
-            "dynamic mid-action strike or high-energy movement",
-            "macro close-up shot focusing on the chest logo and neckline detail",
-            "intense athletic focus in a powerful stance",
-            "close-up zoom on the fabric texture and shoulder stitching"
-        ]
-        selected_pose = poses[variation_index % len(poses)]
-        is_close_up = "close-up" in selected_pose.lower() or "macro" in selected_pose.lower()
+        # Build pose and environment purely from metadata
+        if product.pose != "N/A":
+            pose_text = f"[POSE]: {product.pose}. The model must be ALONE — no other person in the image."
+        else:
+            pose_text = f"[POSE]: The model is a {product.sport} athlete in a mid-action pose that clearly shows they practice {product.sport}. Not a stiff formal pose — the model should look athletic and in motion, like a real {product.sport} athlete during light training or warm-up. Keep it natural and moderate — not too extreme, not too static. The model must be ALONE — no other person, no opponent, no physical contact."
+
+        if product.environment != "N/A":
+            env_text = f"[ENVIRONMENT]: {product.environment}."
+        else:
+            env_text = f"[ENVIRONMENT]: Choose a professional environment that naturally fits {product.sport}. Clean, well-lit, realistic."
 
         for attempt in range(max_retries):
             try:
-                logger.info(f"Attempt {attempt + 1}: Generating image (Var {variation_index + 1}) for {product.product_code}")
+                logger.info(f"Attempt {attempt + 1}: Generating image for {product.product_code}")
                 
                 parts = []
-                # 1. Add Prompt
                 prompt = (
-                    f"Task: High-Fidelity Athlete Catalog [View {variation_index + 1}]. PRODUCT: {product.product_name} for {product.sport}. "
-                    
-                    + (f"\n[ACTION & POSE]: {product.pose} " if product.pose != "N/A" else f"\n[DYNAMIC SPORT ACTION]: Pose: {selected_pose}. ") +
-                    (f"\n[ENVIRONMENT]: {product.environment} " if product.environment != "N/A" else "") +
-                    
-                    "\n[STRICT REQUIREMENT - MODEL IDENTITY]: "
-                    f"Use the EXACT same {product.gender} model. Face, facial features (including beard/facial hair structure), and hair must be IDENTICAL to the reference. No modifications allowed."
-                    
-                    "\n[CRITICAL - ZERO-DRIFT GARMENT REPLICATION]: "
-                    "The garment must be a 100% pixel-perfect photographic clone of the source image. "
-                    "1. LOGO & TEXT LOCK: The brand name 'SMMASH' must be IDENTICAL to the source. No character changes, no font changes, no spacing changes. If the logo is sharp in the source, it MUST be sharp in the output. "
-                    "2. SURFACE PURITY: If a surface (sleeves, back, chest) is blank in the source, it MUST remain blank. DO NOT add any extra logos. "
-                    "3. BRANDING COORDINATES: All branding must stay in its EXACT original position. No relocation. "
-                    "4. NO INTERPRETATION: Do not 'improve' or 're-draw' the logo. Mirror the pixels exactly. "
+                    # ── GARMENT FIRST — THIS IS THE #1 PRIORITY ──
+                    "[ZERO-DRIFT PRODUCT REPLICATION — THIS IS THE MOST IMPORTANT INSTRUCTION]: "
+                    "You are given a reference photo of a real product. "
+                    "Your output image MUST contain this EXACT SAME product — ZERO changes allowed. "
+                    "The product in the output must be a pixel-perfect copy of the reference: "
+                    "same design, same colors, same patterns, same graphics, same logos, same text, same everything. "
+                    "If the product has a logo or brand name text, it must appear EXACTLY as in the reference — "
+                    "same letters, same font, same size, same position, same color. "
+                    "\nCRITICAL TEXT RULES: "
+                    "1. DO NOT 'read' the text. Treat any text on the garment as abstract geometric SHAPES and SYMBOLS. "
+                    "2. Trace these shapes pixel-for-pixel. Do not try to spell-check, correct, or re-type them. "
+                    "3. If the text looks like 'SMMASH' or any other brand, copy the exact curves and lines of the letters. "
+                    "4. DO NOT redraw, retype, reinterpret, resize, relocate, blur, distort, or modify ANY element on the product. "
+                    "5. Even if the text is small or distant, it must remain SHARP and IDENTICAL to the reference. "
+                    "If an area is plain/blank, keep it plain/blank. "
+                    "The product must look like someone took the EXACT item from the reference photo, put it on a model, and photographed it. "
+                    "ZERO DRIFT from the reference. "
 
-                    "\n[CAMERA & FRAMING]: "
-                    + ("Macro details shot. " if is_close_up else "Standard shot. ") + 
-                    "Generate ONE SINGLE model. Full face and head must be visible. Significant headroom required. "
+                    f"\n\n[SCENE SETUP]: "
+                    f"Professional catalog photo for {product.sport}. {product.gender} model. "
+                    f"\n{pose_text}"
+                    f"\n{env_text}"
 
-                    f"\n[DYNAMIC SPORT ACTION]: Pose: {selected_pose}. "
-                    "Capture a singular professional movement. No design changes. No collages."
-                    
-                    "\nQuality: Professional 8K photography, DSLR ultra-sharp focus. ZERO AI HALLUCINATION TOLERANCE."
+                    f"\n\n[MODEL]: "
+                    f"ONE single {product.gender} athletic model, ALONE. "
+                    "Full head, face, and hair completely visible — NEVER crop the top of the head. "
+                    "Leave generous headroom above the head. "
+                    "No other people. No fighting. No grappling. "
+
+                    "\n\n[BODY & MODESTY]: "
+                    "Clothing fits naturally, relaxed look. "
+                    "NO visible outline of private body parts. "
+                    "Garment drapes naturally. Professional catalog standard. "
+
+                    "\n\n[ANATOMY]: "
+                    "Correct human anatomy — 2 arms, 2 legs, 5 fingers per hand. No extra or distorted limbs. "
+
+                    "\n\n[FRAMING]: "
+                    "Full-body shot, head to toe. Entire head in frame with space above. "
+                    "ONE model. No collages. No grids. "
+
+                    "\n\n[QUALITY]: Ultra-high resolution, 8K DSLR photography, razor-sharp focus on product details and logos."
                 )
                 parts.append({"text": prompt})
 
@@ -97,10 +116,11 @@ class NanoBananaService:
                 payload = {
                     "contents": [{"parts": parts}],
                     "generationConfig": {
-                        "temperature": 0.1, 
-                        "topP": 0.1, # Drastically reduced to prevent creativity
-                        "topK": 10,  # Drastically reduced
+                        "temperature": 0.0,
+                        "topP": 0.1,
+                        "topK": 5,
                         "maxOutputTokens": 32768,
+                        "responseModalities": ["TEXT", "IMAGE"],
                     }
                 }
 
@@ -162,6 +182,16 @@ class NanoBananaService:
                         f.write(base64.b64decode(output_image_b64))
 
                     logger.success(f"Generated variation {variation_index + 1}: {output_filename}")
+                    
+                    # ── Logo Refinement Pass ──
+                    # Send generated image + reference back to fix only the logo/text
+                    try:
+                        refined_path = await self._refine_logo(output_path, image_paths)
+                        if refined_path:
+                            return refined_path
+                    except Exception as logo_err:
+                        logger.warning(f"⚠️ Logo refinement failed, using original: {logo_err}")
+                    
                     return output_path
 
             except Exception as e:
@@ -170,22 +200,108 @@ class NanoBananaService:
                     raise e
                 await asyncio.sleep(retry_delay * (attempt + 1))
 
+    async def _refine_logo(self, generated_image_path: str, reference_image_paths: list[str]) -> str | None:
+        """
+        Second-pass: sends the generated image + original references to Gemini
+        with a focused prompt to fix ONLY the logo/text area.
+        Returns the refined image path, or None if refinement fails.
+        """
+        logger.info("🔧 Starting logo refinement pass...")
+        
+        from app.utils.image_processor import ImageProcessor
+        
+        parts = []
+        
+        # Focused edit prompt — ONLY fix the logo
+        # Focused edit prompt — ONLY fix the logo
+        parts.append({"text": (
+            "TASK: PIXEL-PERFECT REPAIR of Garment Graphics & Text. "
+            "\nYou are given: "
+            "1) REFERENCE PRODUCT PHOTOS (first images) — The SOURCE OF TRUTH. Contains the CORRECT logo, text, graphics. "
+            "2) A GENERATED PHOTO (last image) — Needs repair. The text/logos on the garment may be distorted/hallucinated. "
+            "\nYour job: "
+            "Take the GENERATED PHOTO and overwrite the garment's graphics/text with a PIXEL-PERFECT CLONE from the REFERENCE PHOTOS. "
+            "\nCRITICAL RULES FOR TEXT: "
+            "1. DO NOT READ THE TEXT. Treat it as a pattern of shapes or foreign symbols. "
+            "2. DO NOT SPELL-CHECK or RE-TYPE. If the reference says 'SMMASH', trace those exact shapes. "
+            "3. ERASE any hallucinated or distorted text on the generated image and REPLACE it with the exact shapes from the reference. "
+            "4. The final result must look like a PHOTOCOPY of the reference design applied to the model's clothing. "
+            "5. NO BLUR. NO DISTORTION. Sharp edges only. "
+            "\nGENERAL RULES: "
+            "- DO NOT touch the model's face, skin, hair, pose, or background. "
+            "- ONLY edit the pixels on the fabric surface to match the reference design. "
+            "- Output the full, high-quality image with the corrected garment. "
+            "\nORDER: Reference Images (FIRST) -> Generated Image (LAST)."
+        )})
+        
+        # Add reference images first
+        for ref_path in reference_image_paths:
+            if not os.path.exists(ref_path):
+                continue
+            opt_path = ImageProcessor.optimize_for_api(ref_path, max_size=(4096, 4096))
+            with open(opt_path, "rb") as f:
+                img_data = base64.b64encode(f.read()).decode("utf-8")
+            mime_type = "image/png" if opt_path.lower().endswith(".png") else "image/jpeg"
+            parts.append({"inline_data": {"mime_type": mime_type, "data": img_data}})
+        
+        # Add the generated image last
+        with open(generated_image_path, "rb") as f:
+            gen_data = base64.b64encode(f.read()).decode("utf-8")
+        gen_mime = "image/png" if generated_image_path.lower().endswith(".png") else "image/jpeg"
+        parts.append({"inline_data": {"mime_type": gen_mime, "data": gen_data}})
+        
+        payload = {
+            "contents": [{"parts": parts}],
+            "generationConfig": {
+                "temperature": 0.0,
+                "topP": 0.05,
+                "topK": 5,
+                "maxOutputTokens": 32768,
+                "responseModalities": ["TEXT", "IMAGE"],
+            }
+        }
+        
+        endpoint = f"{self.base_url}/models/{settings.GEMINI_MODEL_VERSION}:generateContent"
+        
+        async with httpx.AsyncClient(timeout=180.0) as client:
+            response = await client.post(endpoint, headers=self.headers, json=payload)
+            
+            if response.status_code != 200:
+                logger.warning(f"Logo refinement API error ({response.status_code})")
+                return None
+            
+            result_data = response.json()
+            
+            # Extract refined image
+            refined_b64 = None
+            try:
+                candidate = result_data["candidates"][0]
+                content = candidate.get("content", {})
+                for part in content.get("parts", []):
+                    if "inline_data" in part or "inlineData" in part:
+                        refined_b64 = part.get("inline_data", part.get("inlineData"))["data"]
+                        break
+            except Exception:
+                pass
+            
+            if not refined_b64:
+                logger.warning("Logo refinement returned no image")
+                return None
+            
+            # Save refined image (overwrite the original)
+            refined_path = generated_image_path.replace(".png", "_refined.png")
+            with open(refined_path, "wb") as f:
+                f.write(base64.b64decode(refined_b64))
+            
+            logger.success(f"✅ Logo refined: {refined_path}")
+            return refined_path
+
     async def generate_outfit_image(self, products: list[ProductMetadata], variation_index: int = 0) -> str:
         """
         Calls Gemini with multiple reference images to generate a single cohesive outfit in a specific pose.
         """
         max_retries = 3
         retry_delay = 5
-
-        # Dynamic Pose Logic with Close-ups
-        poses = [
-            "full-body heroic pose showing the complete outfit silhouette",
-            "waist-up medium-close shot showing the top branding and stitching",
-            "dynamic athletic action movement",
-            "close-up focusing on the mid-section showing fabric integration"
-        ]
-        selected_pose = poses[variation_index % len(poses)]
-        is_close_up = "close-up" in selected_pose.lower() or "medium-close" in selected_pose.lower()
 
         # Group products to describe them in the prompt
         upper_keywords = ["GÓRA", "KOSZULKA", "SHIRT", "SWEATSHIRT", "JACKET", "TOP"]
@@ -195,7 +311,6 @@ class NanoBananaService:
         lower_wear = [p for p in products if any(k in str(p.product_type).upper() or k in str(p.product_name).upper() for k in lower_keywords)]
         
         if not upper_wear or not lower_wear:
-            # Fallback for 2 unique products
             unique_codes = list(set([p.product_code for p in products]))
             if len(unique_codes) == 2:
                 upper_wear = [p for p in products if p.product_code == unique_codes[0]]

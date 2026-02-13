@@ -17,6 +17,18 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# --- ENV SYNC (Streamlit Secrets -> OS Environ) ---
+# This allows the backend service (using pydantic settings) to see the secrets
+try:
+    if "NANO_BANANA_API_KEY" in st.secrets:
+        os.environ["NANO_BANANA_API_KEY"] = st.secrets["NANO_BANANA_API_KEY"]
+    if "NANO_BANANA_BASE_URL" in st.secrets:
+        os.environ["NANO_BANANA_BASE_URL"] = st.secrets["NANO_BANANA_BASE_URL"]
+    if "GEMINI_MODEL_VERSION" in st.secrets:
+        os.environ["GEMINI_MODEL_VERSION"] = st.secrets["GEMINI_MODEL_VERSION"]
+except:
+    pass # Running locally or no secrets configured
+
 # --- STYLING ---
 st.markdown("""
 <style>

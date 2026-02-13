@@ -435,6 +435,26 @@ class NanoBananaService:
                     with open(output_path, "wb") as f:
                         f.write(base64.b64decode(output_image_b64))
 
+                    # ── Logo Refinement Pass for Outfits ──
+                    # Sending generated outfit + original references to fix text distortion
+                    try:
+                        # Reconstruct image paths for the refinement function
+                        # Note: p.image_filename usually contains the path relative to IMAGES_DIR or abs path
+                        ref_paths = []
+                        for p in products:
+                            # Handle absolute paths from GUI vs relative paths
+                            if os.path.isabs(p.image_filename):
+                                ref_paths.append(p.image_filename)
+                            else:
+                                ref_paths.append(os.path.join(settings.IMAGES_DIR, p.image_filename))
+                                
+                        refined_path = await self._refine_logo(output_path, ref_paths)
+                        if refined_path:
+                            logger.success(f"✨ Refined Outfit Image (Logo Fixed): {refined_path}")
+                            return refined_path
+                    except Exception as logo_err:
+                        logger.warning(f"⚠️ Logo refinement failed for outfit, using original: {logo_err}")
+
                     logger.success(f"Generated Outfit Image: {output_filename}")
                     return output_path
 
